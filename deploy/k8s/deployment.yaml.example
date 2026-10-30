@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: borzoi
+  labels:
+    app: borzoi
+    environment: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: borzoi
+  template:
+    metadata:
+      labels:
+        app: borzoi
+    spec:
+      imagePullSecrets:
+      - name: registry-secret
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:15
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Waiting for PostgreSQL to be ready..."
+          until pg_isready -h postgres -U borzoi_user -d borzoi; do
+            echo "Waiting for postgres..."
+            sleep 2
+          done
+          echo "PostgreSQL is ready!"
+      - name: prisma-migrate
+        image: your-registry.example.com/your-project/borzoi-job:latest
+        imagePullPolicy: Always
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          echo "Running Prisma migrations..."
+          npx prisma migrate deploy
+          echo "Migrations completed!"
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: borzoi-secrets
+              key: database-url
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: borzoi-secrets
+              key: encryption-key
+      containers:
+      - name: borzoi
+        image: your-registry.example.com/your-project/borzoi:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        env:
+        # Environment variables from Secrets
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: borzoi-secrets
+              key: database-url
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: borzoi-secrets
+              key: encryption-key
+        # OIDC client_secret — only needed when AUTH_OIDC_ENABLED=true in the ConfigMap.
+        # The rest of AUTH_OIDC_* (including the non-secret client_id) comes from
+        # ConfigMap via envFrom below.
+        - name: AUTH_OIDC_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: borzoi-secrets
+              key: oidc-client-secret
+        # Node.js performance tuning
+        - name: NODE_OPTIONS
+          value: "--max-old-space-size=8192"
+        # Load environment variables from the ConfigMap.
+        envFrom:
+        - configMapRef:
+            name: borzoi-config
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "4000m"
+          limits:
+            memory: "12Gi"
+            cpu: "8000m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      restartPolicy: Always

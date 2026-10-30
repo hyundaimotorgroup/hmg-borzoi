@@ -1,0 +1,68 @@
+# editor swap files
+*.swp
+*.swo
+
+# dependencies
+node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+public/monaco/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+*.key
+*.p12
+*.pfx
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files — copy .env.local.example (EN) or .env.local.ko.example (KO).
+# Keep the committed examples visible while preventing every real environment file
+# (including .env.production and .env.prod) from being added accidentally.
+.env*
+!.env.local.example
+!.env.local.ko.example
+
+# Playwright writes live, short-lived session tokens here during E2E setup.
+e2e/.auth/
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# generated reports
+eslint-report.json
+chart-validation-report.html
+
+# kubernetes secrets — copy from secret.yaml.example and fill in values, do not commit
+deploy/k8s/secret.yaml
+deploy/k8s/postgres-secret.yaml
+
+# deploy scripts and manifests with real values — copy from *.example and fill in
+deploy/scripts/build-and-push.sh
+deploy/scripts/deploy.sh
+deploy/k8s/deployment.yaml
+deploy/k8s/ingress.yaml
+deploy/k8s/prisma-migration-job.yaml
+deploy/k8s/configmap.yaml
+
+# backup files
+*.bak
+*.backup

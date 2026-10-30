@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: prisma-migrate
+  labels:
+    app: prisma-migrate
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: prisma-migrate
+    spec:
+      restartPolicy: OnFailure
+      imagePullSecrets:
+      - name: registry-secret
+      containers:
+      - name: prisma-migrate
+        image: your-registry.example.com/your-project/borzoi-job:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          echo "Running Prisma migrations..."
+          npx prisma migrate deploy
+          echo "Migrations completed successfully!"
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: borzoi-secrets
+              key: database-url
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: borzoi-secrets
+              key: encryption-key

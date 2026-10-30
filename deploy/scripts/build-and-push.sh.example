@@ -1,0 +1,88 @@
+#!/bin/bash
+
+# Build images and push them to a container registry.
+# Usage: run from the project root.
+#   ./deploy/scripts/build-and-push.sh [tag] [target]
+#   target: app | job | all (default: all)
+#
+# Examples:
+#   ./deploy/scripts/build-and-push.sh                    # Build/push both images with the latest tag.
+#   ./deploy/scripts/build-and-push.sh v1.0.0             # Build/push both images with the v1.0.0 tag.
+#   ./deploy/scripts/build-and-push.sh latest app         # App image only
+#   ./deploy/scripts/build-and-push.sh latest job         # Job image only
+
+set -e
+
+# Color definitions
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Settings (can be overridden with environment variables)
+REGISTRY_URL="${REGISTRY_URL:-your-registry.example.com}"
+REGISTRY_PROJECT="${REGISTRY_PROJECT:-your-project}"
+IMAGE_NAME="${IMAGE_NAME:-borzoi}"
+JOB_IMAGE_NAME="${JOB_IMAGE_NAME:-borzoi-job}"
+IMAGE_TAG="${1:-latest}"
+BUILD_TARGET="${2:-all}"   # app | job | all
+FULL_IMAGE="${REGISTRY_URL}/${REGISTRY_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG}"
+FULL_JOB_IMAGE="${REGISTRY_URL}/${REGISTRY_PROJECT}/${JOB_IMAGE_NAME}:${IMAGE_TAG}"
+
+printf "${BLUE}========================================${NC}"
+printf "${BLUE}  Docker image build and push${NC}"
+printf "${BLUE}========================================${NC}"
+echo ""
+printf "Target: ${YELLOW}${BUILD_TARGET}${NC}  Tag: ${YELLOW}${IMAGE_TAG}${NC}"
+if [ "${BUILD_TARGET}" = "app" ] || [ "${BUILD_TARGET}" = "all" ]; then
+    printf "  App image: ${GREEN}${FULL_IMAGE}${NC}"
+fi
+if [ "${BUILD_TARGET}" = "job" ] || [ "${BUILD_TARGET}" = "all" ]; then
+    printf "  Job image: ${GREEN}${FULL_JOB_IMAGE}${NC}"
+fi
+echo ""
+
+STEP=1
+
+# Build/push the app image.
+if [ "${BUILD_TARGET}" = "app" ] || [ "${BUILD_TARGET}" = "all" ]; then
+    printf "${YELLOW}[${STEP}] Building app image (--target runner, linux/amd64)...${NC}"
+    docker build --platform linux/amd64 --target runner -f deploy/docker/Dockerfile -t "${FULL_IMAGE}" .
+    printf "${GREEN}✓ App image build complete${NC}"
+    echo ""
+    STEP=$((STEP + 1))
+
+    printf "${YELLOW}[${STEP}] Pushing app image...${NC}"
+    docker push "${FULL_IMAGE}"
+    printf "${GREEN}✓ App image push complete${NC}"
+    echo ""
+    STEP=$((STEP + 1))
+fi
+
+# Build/push the job image.
+if [ "${BUILD_TARGET}" = "job" ] || [ "${BUILD_TARGET}" = "all" ]; then
+    printf "${YELLOW}[${STEP}] Building job image (--target migration, linux/amd64)...${NC}"
+    docker build --platform linux/amd64 --target migration -f deploy/docker/Dockerfile -t "${FULL_JOB_IMAGE}" .
+    printf "${GREEN}✓ Job image build complete${NC}"
+    echo ""
+    STEP=$((STEP + 1))
+
+    printf "${YELLOW}[${STEP}] Pushing job image...${NC}"
+    docker push "${FULL_JOB_IMAGE}"
+    printf "${GREEN}✓ Job image push complete${NC}"
+    echo ""
+fi
+
+# Completion summary
+printf "${BLUE}========================================${NC}"
+printf "${GREEN}✓ Done!${NC}"
+printf "${BLUE}========================================${NC}"
+echo ""
+if [ "${BUILD_TARGET}" = "app" ] || [ "${BUILD_TARGET}" = "all" ]; then
+    echo "  App:  ${FULL_IMAGE}"
+fi
+if [ "${BUILD_TARGET}" = "job" ] || [ "${BUILD_TARGET}" = "all" ]; then
+    echo "  Job:  ${FULL_JOB_IMAGE}"
+fi
+echo ""

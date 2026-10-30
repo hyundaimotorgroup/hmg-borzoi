@@ -1,0 +1,219 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Cluster {
+  id          String              @id @default(cuid())
+  name        String              @unique
+  host        String
+  port        Int                 @default(8123)
+  protocol    String              @default("http")
+  username    String
+  password    String
+  useTLS      Boolean             @default(false)
+  environment String              @default("dev")
+  version     String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  alerts      AlertRule[]
+  databases   Database[]
+  userAccess  UserClusterAccess[]
+
+  @@index([environment])
+  @@index([name])
+}
+
+model Database {
+  id        String   @id @default(cuid())
+  clusterId String
+  name      String
+  engine    String?
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  cluster   Cluster  @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  tables    Table[]
+
+  @@unique([clusterId, name])
+  @@index([clusterId])
+}
+
+model Table {
+  id         String   @id @default(cuid())
+  databaseId String
+  name       String
+  engine     String?
+  totalRows  BigInt   @default(0)
+  totalBytes BigInt   @default(0)
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  database   Database @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+
+  @@unique([databaseId, name])
+  @@index([databaseId])
+}
+
+model User {
+  id            String              @id @default(cuid())
+  email         String              @unique
+  name          String
+  role          String              @default("viewer")
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  password      String?
+  // Set once, the first time AUTH_OIDC_ADMIN_EMAILS grants this account admin.
+  // Never cleared automatically — this makes the allowlist a one-time bootstrap
+  // rather than a continuously-enforced source of truth, so a later manual
+  // demotion via the app-users UI isn't undone by the next SSO login.
+  ssoAdminGrantedAt DateTime?
+  savedQueries  SavedQuery[]
+  clusterAccess UserClusterAccess[]
+  sessions      Session[]
+  externalIdentities ExternalIdentity[]
+
+  @@index([email])
+}
+
+// Binds a User to a stable OIDC identity (issuer + subject), so a later email
+// change or reuse at the IdP can't silently reassign an account. Email is only
+// used to link/create a User the first time a given (issuer, subject) is seen;
+// every login after that resolves directly through this table.
+model ExternalIdentity {
+  id        String   @id @default(cuid())
+  issuer    String
+  subject   String
+  userId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issuer, subject])
+  @@index([userId])
+}
+
+model Session {
+  id             String    @id @default(cuid())
+  tokenHash      String    @unique
+  userId         String
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  // Why this session was revoked ('superseded' | 'idle_timeout' | 'logout' |
+  // 'admin_revoked'), null while still active. Lets the client tell "a newer
+  // login elsewhere replaced this session" (superseded) apart from an idle
+  // timeout it already has its own precise, self-timed handling for — see
+  // AuthContext.tsx.
+  revokedReason  String?
+  createdAt      DateTime  @default(now())
+  // Bumped (throttled) on each authenticated request; getSessionUser() compares
+  // this against SESSION_IDLE_TIMEOUT_MINUTES to enforce idle logout, independent
+  // of the absolute expiresAt.
+  lastActivityAt DateTime  @default(now())
+  ipAddress      String?
+  userAgent      String?
+  // Encrypted (AES-256-GCM, see src/lib/crypto.ts) copy of the OIDC id_token
+  // issued at SSO login. Some IdPs require it as id_token_hint on logout;
+  // null for password logins and IdPs that don't need it.
+  idToken        String?
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model UserClusterAccess {
+  id         String   @id @default(cuid())
+  userId     String
+  clusterId  String
+  createdAt  DateTime @default(now())
+  chPassword String?
+  chUsername String?
+  cluster    Cluster  @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clusterId])
+  @@index([userId])
+  @@index([clusterId])
+}
+
+model AlertRule {
+  id                   String         @id @default(cuid())
+  clusterId            String
+  name                 String
+  description          String?
+  query                String
+  checkIntervalMinutes Int            @default(1)
+  thresholds           Json           @default("[]")
+  thresholdColumnName  String?
+  notificationChannels Json           @default("[]")
+  enabled              Boolean        @default(true)
+  lastExecutedAt       DateTime?
+  lastAlertStatus      String?
+  createdBy            String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  cluster              Cluster        @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  executionLogs        ExecutionLog[]
+
+  @@index([clusterId])
+  @@index([createdBy])
+  @@index([enabled])
+  @@index([createdAt])
+}
+
+model ExecutionLog {
+  id               String    @id @default(cuid())
+  alertRuleId      String
+  queryResult      String?
+  thresholdMet     Boolean   @default(false)
+  matchedSeverity  String?
+  notificationSent Boolean   @default(false)
+  error            String?
+  executionTimeMs  Int       @default(0)
+  executedAt       DateTime  @default(now())
+  resolvedAt       DateTime?
+  alertRule        AlertRule @relation(fields: [alertRuleId], references: [id], onDelete: Cascade)
+
+  @@index([alertRuleId])
+  @@index([executedAt])
+  @@index([thresholdMet])
+  @@index([resolvedAt])
+}
+
+model SavedQuery {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  query     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  timestamp    DateTime @default(now())
+  userId       String
+  userName     String
+  action       String
+  resourceType String
+  resourceId   String?
+  resourceName String?
+  details      String
+  ipAddress    String
+  userAgent    String
+  success      Boolean  @default(true)
+  errorMessage String?
+
+  @@index([timestamp])
+  @@index([userId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([success])
+}

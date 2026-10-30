@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: borzoi-config
+data:
+  # Environment settings
+  ENVIRONMENT: "dev"
+  NODE_ENV: "production"
+
+  # Next.js public environment variables
+  NEXT_PUBLIC_USE_MOCK: "false"
+  NEXT_PUBLIC_API_URL: "/api"
+
+  # Alert evaluation interval in minutes
+  ALERT_EVALUATION_INTERVAL_MINUTES: "1"
+
+  # Allow public registration via /api/auth/register.
+  # When AUTH_OIDC_ENABLED is true, /api/auth/register always returns 403 regardless
+  # of this value. Keep it false here to make the intended configuration explicit.
+  ALLOW_PUBLIC_REGISTRATION: "false"
+
+  # Enable Query Editor. Do not use the NEXT_PUBLIC_ prefix, which fixes values at
+  # build time. The server reads this value directly from process.env at runtime.
+  ENABLE_QUERY_EDITOR: "true"
+
+  # Idle timeout in minutes. Empty or 0 disables it and hides the countdown in the
+  # top-right corner. Mouse, keyboard, and scroll activity reset the timeout;
+  # without activity, the session is invalidated as soon as this interval elapses.
+  SESSION_IDLE_TIMEOUT_MINUTES: "30"
+
+  # Absolute maximum session lifetime in minutes. The session expires this long
+  # after sign-in regardless of activity, independently of the idle timeout.
+  # Defaults to 1440 minutes (24 hours) when unset.
+  SESSION_MAX_LIFETIME_MINUTES: "1440"
+
+  # Enforce the Secure attribute on app_session/oidc_txn cookies by default.
+  # Secure cookies are issued regardless of NODE_ENV. Set this to "true" only
+  # for hosts that serve the app over plain HTTP without TLS (e.g., an internal
+  # development domain). Otherwise, browsers reject Secure cookies over HTTP,
+  # so login returns 200 but the browser does not remain signed in.
+  # Never set this to "true" on TLS-enabled domains (e.g., production): session
+  # tokens would be sent in plaintext and could be intercepted.
+  AUTH_COOKIE_ALLOW_INSECURE: "false"
+
+  # Default ClickHouse settings (add as needed)
+  # CLICKHOUSE_HOST: "clickhouse-service"
+  # CLICKHOUSE_PORT: "8123"
+
+  # Enable OIDC-based SSO sign-in (disabled by default; only "true" enables it).
+  # When enabled, /api/auth/login and /api/auth/register return 403,
+  # and the login page displays only the SSO button.
+  AUTH_OIDC_ENABLED: "false"
+
+  # Issuer URL of the OIDC provider (IdP). The provider must expose
+  # https://issuer/.well-known/openid-configuration. A discovery document URL also
+  # works: /.well-known/ is not appended again if it is already present.
+  AUTH_OIDC_ISSUER: "https://idp.example.com"
+
+  # Client ID (client_id) is not a secret, so it belongs in the ConfigMap.
+  # Manage client_secret separately as oidc-client-secret in secret.yaml.
+  AUTH_OIDC_CLIENT_ID: "your-client-id"
+
+  # Public base URL of this app. Used to construct the callback redirect_uri
+  # (BASE_URL + /api/auth/oidc/callback) and post_logout_redirect_uri (BASE_URL + /login).
+  # Register both exact URLs in the IdP client settings, and include this host in
+  # the ingress.yaml rules so the app is reachable.
+  AUTH_OIDC_BASE_URL: "https://your-app.example.com"
+
+  # Requested OIDC scopes (default: openid profile email)
+  AUTH_OIDC_SCOPE: "openid profile email"
+
+  # ID Token claim used to match or create User.email (default: email)
+  AUTH_OIDC_USER_NAME_CLAIM: "email"
+  # Regex applied to the claim value; capture group 1 is the final identifier (default: use the entire value).
+  AUTH_OIDC_USER_NAME_CLAIM_REGEX: "(.*)"
+
+  # Client authentication method: client_secret_basic or client_secret_post (default: client_secret_basic).
+  # Check token_endpoint_auth_methods_supported in the discovery document before setting it.
+  AUTH_OIDC_CLIENT_AUTHENTICATION_METHOD: "client_secret_basic"
+
+  # email_verified validation policy for the email claim: trust (default) / require / ignore.
+  # Use ignore if the internal IdP omits this claim or always returns false.
+  AUTH_OIDC_EMAIL_VERIFIED_POLICY: "trust"
+
+  # On first SSO sign-in, these emails receive admin privileges and access to all
+  # clusters once. Manage subsequent access in app-users. Separate emails with commas.
+  AUTH_OIDC_ADMIN_EMAILS: "admin1@example.com,admin2@example.com"

@@ -1,0 +1,1 @@
+-- Manual migration to sync schema

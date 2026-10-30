@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: borzoi_postgres
+    environment:
+      POSTGRES_USER: borzoi_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}  # Local development default; override it in .env.
+      POSTGRES_DB: borzoi
+    ports:
+      - "127.0.0.1:5433:5432"  # Bind only to localhost to prevent exposure to external networks.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U borzoi_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

@@ -1,0 +1,54 @@
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+# Keep package-lock.json because Docker builds require it.
+yarn.lock
+pnpm-lock.yaml
+
+# Testing
+coverage
+.nyc_output
+
+# Next.js
+.next
+out
+dist
+build
+
+# Production
+.vercel
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug
+*.log
+*.log.*
+logs
+
+# Local env files
+.env
+.env*.local
+.env.development
+.env.test
+.env.production
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Misc
+README.md
+docs
+.editorconfig
+.eslintrc
+.prettierrc
