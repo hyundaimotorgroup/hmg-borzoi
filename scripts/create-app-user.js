@@ -6,10 +6,12 @@
  */
 
 const { PrismaClient } = require('@prisma/client');
+const { PrismaPg } = require('@prisma/adapter-pg');
 const bcrypt = require('bcryptjs');
 const { process } = globalThis;
 
-const prisma = new PrismaClient();
+require('dotenv').config({ path: '.env.local', override: false, quiet: true });
+
 const VALID_ROLES = new Set(['admin', 'developer', 'viewer']);
 
 function parseArgs(argv) {
@@ -57,6 +59,15 @@ async function main() {
     printUsage();
     process.exit(1);
   }
+
+  if (!process.env.DATABASE_URL) {
+    console.error('❌ DATABASE_URL environment variable is not set. Configure .env.local or export DATABASE_URL.');
+    process.exitCode = 1;
+    return;
+  }
+
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+  const prisma = new PrismaClient({ adapter });
 
   try {
     const existingUser = await prisma.user.findUnique({
