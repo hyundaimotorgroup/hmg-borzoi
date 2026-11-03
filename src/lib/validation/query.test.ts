@@ -25,17 +25,45 @@ describe("query execution validation", () => {
     expect(result.data?.query).toBe("hello world");
   });
 
-  it("adds a default limit to select-like queries without one", () => {
-    expect(prepareQueryForExecution("SELECT * FROM system.tables")).toEqual({
-      query: `SELECT * FROM (SELECT * FROM system.tables) AS subquery LIMIT ${QUERY_EXECUTION_DEFAULT_LIMIT}`,
+  it.each([
+    "SELECT * FROM system.tables",
+    "SELECT * FROM system.tables;",
+  ])("adds a default limit to select-like queries without one: %s", (query) => {
+    expect(prepareQueryForExecution(query)).toEqual({
+      query: `SELECT * FROM (SELECT * FROM system.tables\n) AS subquery LIMIT ${QUERY_EXECUTION_DEFAULT_LIMIT}`,
       limitAdded: true,
       limitValue: QUERY_EXECUTION_DEFAULT_LIMIT,
     });
   });
 
-  it("keeps explicit limits untouched", () => {
-    expect(prepareQueryForExecution("SELECT * FROM system.tables LIMIT 10")).toEqual({
-      query: "SELECT * FROM system.tables LIMIT 10",
+  it.each([
+    "SELECT 1 -- trailing comment",
+    "SELECT *\nFROM system.tables\n-- trailing comment",
+    "WITH 1 AS value SELECT value -- LIMIT is only a comment",
+  ])("keeps the wrapper outside trailing line comments: %s", (query) => {
+    expect(prepareQueryForExecution(query)).toEqual({
+      query: `SELECT * FROM (${query}\n) AS subquery LIMIT ${QUERY_EXECUTION_DEFAULT_LIMIT}`,
+      limitAdded: true,
+      limitValue: QUERY_EXECUTION_DEFAULT_LIMIT,
+    });
+  });
+
+  it("preserves comment markers inside literals and block comments", () => {
+    const query = "SELECT '--literal' AS value /* keep this comment */";
+
+    expect(prepareQueryForExecution(query)).toEqual({
+      query: `SELECT * FROM (${query}\n) AS subquery LIMIT ${QUERY_EXECUTION_DEFAULT_LIMIT}`,
+      limitAdded: true,
+      limitValue: QUERY_EXECUTION_DEFAULT_LIMIT,
+    });
+  });
+
+  it.each([
+    "SELECT * FROM system.tables LIMIT 10",
+    "SELECT * FROM system.tables LIMIT 10 -- trailing comment",
+  ])("keeps explicit limits untouched: %s", (query) => {
+    expect(prepareQueryForExecution(query)).toEqual({
+      query,
       limitAdded: false,
       limitValue: undefined,
     });

@@ -27,7 +27,8 @@ export function prepareQueryForExecution(
     if (normalizedQuery.endsWith(";")) {
       normalizedQuery = normalizedQuery.slice(0, -1).trim();
     }
-    normalizedQuery = `SELECT * FROM (${normalizedQuery}) AS subquery LIMIT ${limitValue}`;
+    // End any trailing line comment before appending the wrapper.
+    normalizedQuery = `SELECT * FROM (${normalizedQuery}\n) AS subquery LIMIT ${limitValue}`;
     limitAdded = true;
   }
 
