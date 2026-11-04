@@ -90,7 +90,7 @@ Instead, follow the reporting process described in:
 ### Prerequisites
 
 - Git
-- Node.js >= 20.x
+- Node.js 22.23.4
 - npm >= 10.x
 - Docker (for local PostgreSQL)
 - A running ClickHouse instance

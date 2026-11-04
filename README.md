@@ -21,7 +21,7 @@ hmg-Borzoi is an open-source administration platform for operating physical Clic
 
 ### Prerequisites
 
-- Node.js 20 or later
+- Node.js 22.23.4
 - npm 10 or later
 - Docker and Docker Compose (for local PostgreSQL)
 - A reachable ClickHouse cluster

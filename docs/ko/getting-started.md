@@ -6,7 +6,7 @@
 
 ## 준비물
 
-- Node.js 20 이상
+- Node.js 22.23.4
 - npm
 - Docker / Docker Compose (로컬 PostgreSQL 실행용)
 - 운영 중인 ClickHouse 인스턴스
