@@ -21,6 +21,7 @@ export function DatabasesPage({ currentUser: _currentUser }: DatabasesPageProps)
     <ClusterExplorerLayout
       requireDatabase
       showExplorer
+      explorerWidthStorageKey="databases-explorer-width"
       onTableSelect={(database, table) => {
         setExplorerNav((prev) => ({
           database,

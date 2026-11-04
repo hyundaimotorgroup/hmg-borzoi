@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { useSelectedCluster } from "@/contexts/SelectedClusterContext";
 import { Database as DatabaseIcon, Network, PanelLeftOpen, RefreshCw, Server } from "lucide-react";
 import { DatabaseExplorer } from "@/components/DatabaseExplorer";
@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/select";
 import { useClusters } from "@/components/user-management/hooks/useClusters";
 import type { ClusterOption } from "@/components/user-management/types";
+import { useExplorerResize } from "@/lib/hooks/use-explorer-resize";
+import styles from "./ClusterExplorerLayout.module.css";
 
 function getPhysicalClusterName(option: ClusterOption): string {
   if (!option.isLogical) return option.name;
@@ -54,6 +56,8 @@ interface ClusterExplorerLayoutProps {
   requireDatabase?: boolean;
   /** whether to show the left Table Explorer sidebar */
   showExplorer?: boolean;
+  /** Browser storage key for this screen's preferred explorer width. */
+  explorerWidthStorageKey?: string;
   onTableSelect?: (database: string, table: string) => void;
   onRefresh?: () => void;
   refreshing?: boolean;
@@ -63,6 +67,7 @@ interface ClusterExplorerLayoutProps {
 export function ClusterExplorerLayout({
   requireDatabase = false,
   showExplorer = false,
+  explorerWidthStorageKey,
   onTableSelect,
   onRefresh,
   refreshing = false,
@@ -120,7 +125,10 @@ export function ClusterExplorerLayout({
     else setIsExplorerOpen(false);
   };
 
-  const showContent = effectiveClusterId && (!requireDatabase || selectedDatabase);
+  const showContent = Boolean(effectiveClusterId && (!requireDatabase || selectedDatabase));
+  const explorerVisible = Boolean(showContent && showExplorer && isExplorerOpen && selectedDatabase);
+  const explorerId = useId();
+  const { containerRef, width: explorerWidth, minWidth, maxWidth, isDragging, handleProps } = useExplorerResize(explorerVisible, explorerWidthStorageKey);
 
   return (
     <div className="p-2 space-y-1">
@@ -204,10 +212,10 @@ export function ClusterExplorerLayout({
 
       {/* Content Area */}
       {showContent ? (
-        <div className="flex gap-6" style={{ height: "calc(100vh - 195px)" }}>
+        <div ref={containerRef} className="flex" style={{ height: "calc(100vh - 195px)" }}>
           {/* Table Explorer sidebar (only when showExplorer=true && database is selected) */}
-          {showExplorer && isExplorerOpen && selectedDatabase && (
-            <div className="flex-shrink-0 overflow-x-auto" style={{ width: 200 }}>
+          {explorerVisible && (
+            <div id={explorerId} key="explorer" className="flex-shrink-0 overflow-x-auto" style={{ width: explorerWidth }}>
               <DatabaseExplorer
                 key={selectedOptionId + selectedDatabase + explorerNonce}
                 clusterId={effectiveClusterId}
@@ -219,8 +227,25 @@ export function ClusterExplorerLayout({
               />
             </div>
           )}
+          {explorerVisible && (
+            <div
+              key="explorer-resize"
+              role="separator"
+              aria-label="Resize table explorer"
+              aria-orientation="vertical"
+              aria-controls={explorerId}
+              aria-valuemin={minWidth}
+              aria-valuemax={maxWidth}
+              aria-valuenow={explorerWidth}
+              aria-valuetext={`${explorerWidth}px`}
+              tabIndex={0}
+              className={styles.resizeHandle}
+              data-dragging={isDragging}
+              {...handleProps}
+            />
+          )}
 
-          <div className="flex flex-1 min-w-0 flex-col">
+          <div key="content" className="flex flex-1 min-w-0 flex-col">
             {showExplorer && !isExplorerOpen && selectedDatabase && (
               <div className="mb-3 flex-shrink-0">
                 <Button

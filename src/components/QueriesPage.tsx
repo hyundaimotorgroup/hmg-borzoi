@@ -18,6 +18,7 @@ export function QueriesPage({ currentUser }: QueriesPageProps) {
   return (
     <ClusterExplorerLayout
       showExplorer
+      explorerWidthStorageKey="query-editor-explorer-width"
       onTableSelect={(database, table) => {
         setSelectedTable({ database, table });
         editorRef.current?.executeWithQuery(`SELECT * FROM ${database}.${table} LIMIT 100`);
