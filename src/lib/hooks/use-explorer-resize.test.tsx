@@ -125,6 +125,60 @@ describe("useExplorerResize", () => {
     expect(window.localStorage.getItem("explorer-test")).toBe("300");
   });
 
+  it.each([
+    { interaction: "a click without movement", positions: [] },
+    { interaction: "a drag beyond the current bound", positions: [500] },
+    { interaction: "a drag back to its starting width", positions: [300, 326] },
+  ])("keeps the saved preference after $interaction", ({ positions }) => {
+    window.localStorage.setItem("explorer-test", "550");
+    containerWidth = 750;
+    render(<Harness />);
+    const handle = preparePointerCapture();
+    vi.mocked(window.localStorage.setItem).mockClear();
+    fireEvent.pointerDown(handle, { clientX: 326 });
+    for (const clientX of positions) fireEvent.pointerMove(handle, { clientX });
+    fireEvent.pointerUp(handle, { clientX: positions.at(-1) ?? 326 });
+    expect(handle).toHaveAttribute("aria-valuenow", "326");
+    expect(window.localStorage.setItem).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem("explorer-test")).toBe("550");
+    expect(handle).toHaveAttribute("data-dragging", "false");
+    expect(document.body.style.userSelect).toBe("");
+    expect(handle.releasePointerCapture).toHaveBeenCalledWith(1);
+    resizeContainer(1200);
+    expect(handle).toHaveAttribute("aria-valuenow", "550");
+  });
+
+  it.each([
+    { key: "ArrowRight", container: 750, displayedWidth: 326 },
+    { key: "End", container: 750, displayedWidth: 326 },
+    { key: "ArrowLeft", container: 500, displayedWidth: 200 },
+    { key: "Home", container: 500, displayedWidth: 200 },
+    { key: "ArrowRight", container: 500, displayedWidth: 200 },
+    { key: "End", container: 500, displayedWidth: 200 },
+  ])("keeps the saved preference when $key cannot change width in a $container px container", ({ key, container, displayedWidth }) => {
+    window.localStorage.setItem("explorer-test", "550");
+    containerWidth = container;
+    render(<Harness />);
+    const handle = screen.getByRole("separator");
+    vi.mocked(window.localStorage.setItem).mockClear();
+    fireEvent.keyDown(handle, { key });
+    expect(handle).toHaveAttribute("aria-valuenow", String(displayedWidth));
+    expect(window.localStorage.setItem).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem("explorer-test")).toBe("550");
+    resizeContainer(1200);
+    expect(handle).toHaveAttribute("aria-valuenow", "550");
+  });
+
+  it("remeasures the container when the explorer is shown again", () => {
+    window.localStorage.setItem("explorer-test", "550");
+    const { rerender } = render(<Harness />);
+    rerender(<Harness active={false} />);
+    containerWidth = 750;
+    rerender(<Harness />);
+    expect(screen.getByRole("separator")).toHaveAttribute("aria-valuenow", "326");
+    expect(window.localStorage.getItem("explorer-test")).toBe("550");
+  });
+
   it("resizes by keyboard and respects the current bounds", () => {
     containerWidth = 750;
     render(<Harness />);
@@ -159,7 +213,7 @@ describe("useExplorerResize", () => {
     expect(screen.getByRole("separator")).toHaveAttribute("aria-valuenow", "496");
   });
 
-  it.each(["garbage", "NaN", "Infinity", "199", "601", "", "null"])("ignores invalid stored width %s", (stored) => {
+  it.each(["garbage", "NaN", "Infinity", "199", "601", "", "null", "300.5", "0x12c", "3e2", "300.0"])("ignores invalid stored width %s", (stored) => {
     window.localStorage.setItem("explorer-test", stored);
     render(<Harness />);
     expect(screen.getByRole("separator")).toHaveAttribute("aria-valuenow", "200");

@@ -20,11 +20,11 @@
 .resizeHandle:hover::after,
 .resizeHandle:focus-visible::after,
 .resizeHandle[data-dragging="true"]::after {
-  background-color: #94a3b8;
+  background-color: var(--color-slate-400);
 }
 
 .resizeHandle:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--color-blue-500);
   outline-offset: -4px;
   border-radius: 6px;
 }
@@ -32,5 +32,9 @@
 :global(.dark) .resizeHandle:hover::after,
 :global(.dark) .resizeHandle:focus-visible::after,
 :global(.dark) .resizeHandle[data-dragging="true"]::after {
-  background-color: #64748b;
+  background-color: var(--color-slate-500);
+}
+
+:global(.dark) .resizeHandle:focus-visible {
+  outline-color: var(--color-blue-400);
 }

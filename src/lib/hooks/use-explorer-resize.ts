@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 
 const MIN_WIDTH = 200;
@@ -33,8 +33,8 @@ export function useExplorerResize(active: boolean, storageKey?: string) {
     if (storageKey) {
       try {
         const stored = window.localStorage.getItem(storageKey);
-        const parsed = stored === null ? NaN : Number(stored);
-        if (Number.isFinite(parsed) && parsed >= MIN_WIDTH && parsed <= MAX_WIDTH) {
+        const parsed = stored !== null && /^\d+$/.test(stored) ? Number(stored) : NaN;
+        if (Number.isInteger(parsed) && parsed >= MIN_WIDTH && parsed <= MAX_WIDTH) {
           restoredWidth = parsed;
         }
       } catch {
@@ -65,11 +65,12 @@ export function useExplorerResize(active: boolean, storageKey?: string) {
       drag.element.releasePointerCapture(drag.pointerId);
     }
     setIsDragging(false);
-    setPreferredWidth(commit ? drag.width : drag.preferredWidth);
-    if (commit) saveWidth(drag.width);
+    const changed = commit && drag.width !== drag.startWidth;
+    setPreferredWidth(changed ? drag.width : drag.preferredWidth);
+    if (changed) saveWidth(drag.width);
   }, [saveWidth]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!active) return;
     const container = containerRef.current;
     if (!container) return;
@@ -143,6 +144,7 @@ export function useExplorerResize(active: boolean, storageKey?: string) {
     }
     event.preventDefault();
     nextWidth = Math.max(MIN_WIDTH, Math.min(maxWidth, nextWidth));
+    if (nextWidth === width) return;
     setPreferredWidth(nextWidth);
     saveWidth(nextWidth);
   };

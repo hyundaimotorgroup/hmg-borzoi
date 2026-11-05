@@ -215,7 +215,7 @@ export function ClusterExplorerLayout({
         <div ref={containerRef} className="flex" style={{ height: "calc(100vh - 195px)" }}>
           {/* Table Explorer sidebar (only when showExplorer=true && database is selected) */}
           {explorerVisible && (
-            <div id={explorerId} key="explorer" className="flex-shrink-0 overflow-x-auto" style={{ width: explorerWidth }}>
+            <div id={explorerId} className="flex-shrink-0 overflow-x-auto" style={{ width: explorerWidth }}>
               <DatabaseExplorer
                 key={selectedOptionId + selectedDatabase + explorerNonce}
                 clusterId={effectiveClusterId}
@@ -229,7 +229,6 @@ export function ClusterExplorerLayout({
           )}
           {explorerVisible && (
             <div
-              key="explorer-resize"
               role="separator"
               aria-label="Resize table explorer"
               aria-orientation="vertical"
@@ -245,7 +244,7 @@ export function ClusterExplorerLayout({
             />
           )}
 
-          <div key="content" className="flex flex-1 min-w-0 flex-col">
+          <div className="flex flex-1 min-w-0 flex-col">
             {showExplorer && !isExplorerOpen && selectedDatabase && (
               <div className="mb-3 flex-shrink-0">
                 <Button
