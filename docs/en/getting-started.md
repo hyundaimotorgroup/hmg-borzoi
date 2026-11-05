@@ -6,7 +6,7 @@ For production deployment, see [deployment-docker.md](deployment-docker.md) or [
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 22.23.4
 - npm
 - Docker / Docker Compose (for local PostgreSQL)
 - A running ClickHouse instance
