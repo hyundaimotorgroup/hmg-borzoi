@@ -1,0 +1,40 @@
+.resizeHandle {
+  position: relative;
+  flex: 0 0 24px;
+  align-self: stretch;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+
+.resizeHandle::after {
+  content: "";
+  position: absolute;
+  inset: 8px 11px;
+  border-radius: 2px;
+  background-color: transparent;
+  transition: background-color 120ms ease;
+}
+
+.resizeHandle:hover::after,
+.resizeHandle:focus-visible::after,
+.resizeHandle[data-dragging="true"]::after {
+  background-color: var(--color-slate-400);
+}
+
+.resizeHandle:focus-visible {
+  outline: 2px solid var(--color-blue-500);
+  outline-offset: -4px;
+  border-radius: 6px;
+}
+
+:global(.dark) .resizeHandle:hover::after,
+:global(.dark) .resizeHandle:focus-visible::after,
+:global(.dark) .resizeHandle[data-dragging="true"]::after {
+  background-color: var(--color-slate-500);
+}
+
+:global(.dark) .resizeHandle:focus-visible {
+  outline-color: var(--color-blue-400);
+}

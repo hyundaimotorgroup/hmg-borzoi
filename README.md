@@ -57,6 +57,8 @@ To connect a ClickHouse cluster, sign in as an administrator and use the **Clust
 | Alerting | Rule-based alerting with execution history |
 | Audit Log | Platform-level audit trail |
 
+In Query Editor and Databases, drag the right edge of Table Explorer to adjust its width. Each screen remembers its width separately in your browser. You can also focus the divider and use the left/right arrow keys to adjust by 16px, or Home/End to select the minimum/maximum available width.
+
 ## Documentation
 
 | | English | 한국어 |
