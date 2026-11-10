@@ -9,15 +9,18 @@ import type { DDLQueueItem } from "../../hooks/useOperationsData";
 import { ChartLoadingBar, useLoadingBarVisibilityState } from "@/components/cluster-detail/shared/charts/ChartLoadingBar";
 import { PanelLoader } from "@/components/ui/loading-spinner";
 import type { NodeNameResolver } from "@/components/cluster-detail/shared/lib/nodeHost";
+import { SnapshotQueries } from "@/lib/clickhouse/queries/snapshot";
+import { formatDateTimeWithTimezone } from "@/lib/utils/time-formatter";
 
 interface DDLQueuePanelProps {
   data: DDLQueueItem[];
   loading: boolean;
   selectedNodes: string[];
+  timezone: string;
   nodeNameResolver?: NodeNameResolver;
 }
 
-export function DDLQueuePanel({ data, loading, selectedNodes, nodeNameResolver }: DDLQueuePanelProps) {
+export function DDLQueuePanel({ data, loading, selectedNodes, timezone, nodeNameResolver }: DDLQueuePanelProps) {
   const { showLoadingState, handleLoadingBarVisibilityChange } = useLoadingBarVisibilityState(loading);
 
   const columns = useMemo<ColumnDef<DDLQueueItem>[]>(() => [
@@ -90,7 +93,9 @@ export function DDLQueuePanel({ data, loading, selectedNodes, nodeNameResolver }
       size: 140,
       meta: { align: "right" as const },
       cell: ({ row }) => (
-        <span className="text-xs text-gray-500 dark:text-gray-400">{row.original.create_time ?? "—"}</span>
+        <span className="text-xs text-gray-500 dark:text-gray-400">
+          {row.original.create_time ? formatDateTimeWithTimezone(row.original.create_time, timezone) : "—"}
+        </span>
       ),
     },
     {
@@ -107,7 +112,7 @@ export function DDLQueuePanel({ data, loading, selectedNodes, nodeNameResolver }
         );
       },
     },
-  ], [nodeNameResolver]);
+  ], [nodeNameResolver, timezone]);
 
   return (
     <Card className="relative overflow-hidden lg:col-span-2 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
@@ -120,21 +125,7 @@ export function DDLQueuePanel({ data, loading, selectedNodes, nodeNameResolver }
             <ChartInfo
               title="DDL Queue Pending Tasks"
               description="Non-finished DDL tasks pending for more than 1 minute from system.distributed_ddl_queue"
-              query={`SELECT
-  host AS hostname,
-  cluster,
-  query,
-  initiator_host,
-  status,
-  formatDateTime(query_create_time, '%Y-%m-%d %H:%i:%S') AS create_time,
-  dateDiff('second', query_create_time, now()) AS age_seconds,
-  formatReadableTimeDelta(age_seconds) AS age,
-  exception_text
-FROM system.distributed_ddl_queue
-WHERE status IN ('Active', 'Inactive', 'Unknown')
-  AND query_create_time < now() - INTERVAL 1 MINUTE
-ORDER BY age_seconds DESC
-LIMIT 50`}
+              query={SnapshotQueries.getDDLQueueDetail()}
               yAxisLabel="Key columns"
               yAxisDescription="Age: time since DDL was submitted | Status: Active/Inactive/Unknown = still pending | Error: exception if the task failed on this node"
               aggregation="count"

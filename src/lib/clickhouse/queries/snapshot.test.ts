@@ -92,3 +92,23 @@ describe('SnapshotQueries system log filters', () => {
     expect(query).not.toMatch(/\n\s*WHERE event_date\b/);
   });
 });
+
+describe('SnapshotQueries operations detail timestamps', () => {
+  // Created timestamps must be returned raw so the client can format them in the user's timezone.
+  const queries = {
+    getMutationsDetail: SnapshotQueries.getMutationsDetail(),
+    getMutationsDetailForNode: SnapshotQueries.getMutationsDetailForNode('node-1'),
+    getDDLQueueDetail: SnapshotQueries.getDDLQueueDetail(),
+    getDDLQueueDetailForNode: SnapshotQueries.getDDLQueueDetailForNode('node-1'),
+  };
+
+  it.each(Object.entries(queries))('%s returns create_time without server-side formatting', (_name, query) => {
+    expect(query).not.toContain('formatDateTime');
+    expect(query).toMatch(/\bcreate_time\b/);
+  });
+
+  it('aliases query_create_time as create_time for the DDL queue', () => {
+    expect(queries.getDDLQueueDetail).toContain('query_create_time AS create_time');
+    expect(queries.getDDLQueueDetailForNode).toContain('query_create_time AS create_time');
+  });
+});

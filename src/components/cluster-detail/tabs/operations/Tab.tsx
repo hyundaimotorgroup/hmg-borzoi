@@ -225,6 +225,7 @@ export function OperationsTab({
               data={ddlQueuePanel.data}
               loading={ddlQueuePanel.loading}
               selectedNodes={selectedNodes}
+              timezone={timezone}
               nodeNameResolver={nodeNameResolver}
             />
 
@@ -245,6 +246,7 @@ export function OperationsTab({
               })}
               selectedNodes={selectedNodes}
               loading={mutationsPanel.loading}
+              timezone={timezone}
               nodeNameResolver={nodeNameResolver}
             />
 

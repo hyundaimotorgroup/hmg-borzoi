@@ -1049,7 +1049,7 @@ export const SnapshotQueries = {
     table,
     mutation_id,
     command,
-    formatDateTime(create_time, '%Y-%m-%d %H:%i:%S') AS create_time,
+    create_time,
     parts_to_do,
     latest_fail_reason
   FROM clusterAllReplicas(
@@ -1074,7 +1074,7 @@ export const SnapshotQueries = {
     table,
     mutation_id,
     command,
-    formatDateTime(create_time, '%Y-%m-%d %H:%i:%S') AS create_time,
+    create_time,
     parts_to_do,
     latest_fail_reason
   FROM system.mutations
@@ -1096,7 +1096,7 @@ export const SnapshotQueries = {
     query,
     initiator_host,
     status,
-    formatDateTime(query_create_time, '%Y-%m-%d %H:%i:%S') AS create_time,
+    query_create_time AS create_time,
     dateDiff('second', query_create_time, now()) AS age_seconds,
     formatReadableTimeDelta(age_seconds) AS age,
     exception_text
@@ -1114,7 +1114,7 @@ export const SnapshotQueries = {
     query,
     initiator_host,
     status,
-    formatDateTime(query_create_time, '%Y-%m-%d %H:%i:%S') AS create_time,
+    query_create_time AS create_time,
     dateDiff('second', query_create_time, now()) AS age_seconds,
     formatReadableTimeDelta(age_seconds) AS age,
     exception_text

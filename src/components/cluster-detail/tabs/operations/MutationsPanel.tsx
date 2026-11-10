@@ -9,15 +9,18 @@ import type { MutationItem } from "../../hooks/useOperationsData";
 import { ChartLoadingBar, useLoadingBarVisibilityState } from "@/components/cluster-detail/shared/charts/ChartLoadingBar";
 import { PanelLoader } from "@/components/ui/loading-spinner";
 import type { NodeNameResolver } from "@/components/cluster-detail/shared/lib/nodeHost";
+import { SnapshotQueries } from "@/lib/clickhouse/queries/snapshot";
+import { formatDateTimeWithTimezone } from "@/lib/utils/time-formatter";
 
 interface MutationsPanelProps {
   data: MutationItem[];
   selectedNodes: string[];
   loading: boolean;
+  timezone: string;
   nodeNameResolver?: NodeNameResolver;
 }
 
-export function MutationsPanel({ data, selectedNodes, loading, nodeNameResolver }: MutationsPanelProps) {
+export function MutationsPanel({ data, selectedNodes, loading, timezone, nodeNameResolver }: MutationsPanelProps) {
   const { showLoadingState, handleLoadingBarVisibilityChange } = useLoadingBarVisibilityState(loading);
 
   const columns = useMemo<ColumnDef<MutationItem>[]>(() => [
@@ -91,7 +94,9 @@ export function MutationsPanel({ data, selectedNodes, loading, nodeNameResolver 
       header: "Created At",
       size: 140,
       cell: ({ row }) => (
-        <span className="text-xs text-gray-600 dark:text-gray-400">{row.original.create_time}</span>
+        <span className="text-xs text-gray-600 dark:text-gray-400">
+          {row.original.create_time ? formatDateTimeWithTimezone(row.original.create_time, timezone) : "—"}
+        </span>
       ),
     },
     {
@@ -123,7 +128,7 @@ export function MutationsPanel({ data, selectedNodes, loading, nodeNameResolver 
         );
       },
     },
-  ], [nodeNameResolver]);
+  ], [nodeNameResolver, timezone]);
 
   return (
     <Card className="relative overflow-hidden lg:col-span-2 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
@@ -136,19 +141,7 @@ export function MutationsPanel({ data, selectedNodes, loading, nodeNameResolver 
             <ChartInfo
               title="Active Mutations"
               description="Active ALTER UPDATE/DELETE mutations per replica. Each replica processes parts independently, so parts_to_do may differ across replicas."
-              query={`SELECT
-  hostName() AS hostname,
-  database, table, mutation_id, command,
-  formatDateTime(create_time, '%Y-%m-%d %H:%i:%S') AS create_time,
-  parts_to_do, latest_fail_reason
-FROM clusterAllReplicas(
-  (SELECT cluster FROM system.clusters WHERE is_local = 1 LIMIT 1),
-  system.mutations
-)
-WHERE is_done = 0
-ORDER BY create_time DESC
-LIMIT 50
-SETTINGS skip_unavailable_shards = 1`}
+              query={SnapshotQueries.getMutationsDetail()}
               yAxisLabel="Key columns"
               yAxisDescription={`Node/Shard/Replica: mutations run independently per replica — the same mutation_id may show different parts_to_do across replicas\nParts Left: number of parts still to be rewritten; 0 means complete\nLast Error: most recent failure reason; repeated failures require immediate attention`}
               aggregation="snapshot"
