@@ -139,7 +139,7 @@ export function MutationsPanel({ data, selectedNodes, loading, nodeNameResolver 
               query={`SELECT
   hostName() AS hostname,
   database, table, mutation_id, command,
-  formatDateTime(create_time, '%Y-%m-%d %H:%M:%S') AS create_time,
+  formatDateTime(create_time, '%Y-%m-%d %H:%i:%S') AS create_time,
   parts_to_do, latest_fail_reason
 FROM clusterAllReplicas(
   (SELECT cluster FROM system.clusters WHERE is_local = 1 LIMIT 1),

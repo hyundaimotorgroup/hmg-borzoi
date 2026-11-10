@@ -126,7 +126,7 @@ export function DDLQueuePanel({ data, loading, selectedNodes, nodeNameResolver }
   query,
   initiator_host,
   status,
-  formatDateTime(query_create_time, '%Y-%m-%d %H:%M:%S') AS create_time,
+  formatDateTime(query_create_time, '%Y-%m-%d %H:%i:%S') AS create_time,
   dateDiff('second', query_create_time, now()) AS age_seconds,
   formatReadableTimeDelta(age_seconds) AS age,
   exception_text
