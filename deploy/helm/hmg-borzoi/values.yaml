@@ -1,0 +1,239 @@
+# Default values for the hmg-borzoi chart.
+# See deploy/helm/hmg-borzoi/README.md for installation instructions.
+
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 1
+
+# Extra labels added to every resource, e.g. { environment: dev }.
+commonLabels: {}
+
+# Override the Deployment/Service selector labels. Leave empty for new installs.
+# Only needed to adopt an existing Deployment: its selector is immutable, so it
+# must match what is already deployed, e.g. { app: my-existing-label }.
+selectorLabels: {}
+
+# Application image (built from deploy/docker/Dockerfile, default target).
+image:
+  repository: your-registry.example.com/your-project/hmg-borzoi
+  # Defaults to Chart.appVersion when empty.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Pull secrets for the private registry, e.g. [{ name: registry-secret }].
+# Create them beforehand:
+#   kubectl create secret docker-registry registry-secret ... -n <namespace>
+imagePullSecrets: []
+
+# Prisma migration runs as an initContainer before the app starts, matching the
+# plain-manifest flow in deploy/k8s. `migrate deploy` is idempotent.
+migration:
+  enabled: true
+  # Built from deploy/docker/Dockerfile with `--target migration`.
+  image:
+    repository: your-registry.example.com/your-project/hmg-borzoi-job
+    # Defaults to Chart.appVersion when empty.
+    tag: ""
+    pullPolicy: IfNotPresent
+  resources: {}
+
+# Wait for an external PostgreSQL before running migrations. Not needed when
+# postgresql.enabled is true (the chart then waits for the in-cluster instance).
+waitForPostgres:
+  enabled: false
+  host: ""
+  port: 5432
+  username: ""
+  database: ""
+  image:
+    repository: postgres
+    tag: "15"
+    pullPolicy: IfNotPresent
+
+# Non-sensitive environment variables, rendered into a ConfigMap and loaded with
+# envFrom. See deploy/k8s/configmap.yaml.example for the meaning of each key.
+# Every value must be a string; quote booleans and numbers.
+config:
+  ENVIRONMENT: "dev"
+  NODE_ENV: "production"
+  NEXT_PUBLIC_USE_MOCK: "false"
+  NEXT_PUBLIC_API_URL: "/api"
+  ALERT_EVALUATION_INTERVAL_MINUTES: "1"
+  ALLOW_PUBLIC_REGISTRATION: "false"
+  ENABLE_QUERY_EDITOR: "true"
+  SESSION_IDLE_TIMEOUT_MINUTES: "30"
+  SESSION_MAX_LIFETIME_MINUTES: "1440"
+  # Set to "true" only for hosts served over plain HTTP. Never on TLS domains.
+  AUTH_COOKIE_ALLOW_INSECURE: "false"
+
+  # OIDC SSO. When "true", AUTH_OIDC_* below are required and the
+  # oidcClientSecret must be provided through the Secret.
+  AUTH_OIDC_ENABLED: "false"
+  # AUTH_OIDC_ISSUER: "https://idp.example.com"
+  # AUTH_OIDC_CLIENT_ID: "your-client-id"
+  # AUTH_OIDC_BASE_URL: "https://your-app.example.com"
+  # AUTH_OIDC_SCOPE: "openid profile email"
+  # AUTH_OIDC_USER_NAME_CLAIM: "email"
+  # AUTH_OIDC_USER_NAME_CLAIM_REGEX: "(.*)"
+  # AUTH_OIDC_CLIENT_AUTHENTICATION_METHOD: "client_secret_basic"
+  # AUTH_OIDC_EMAIL_VERIFIED_POLICY: "trust"
+  # AUTH_OIDC_ADMIN_EMAILS: "admin1@example.com,admin2@example.com"
+
+# Sensitive values. Either let the chart create the Secret, or point
+# `existingSecret` at one you manage (SealedSecrets, External Secrets, ...).
+secret:
+  # Name of an existing Secret. When set, the chart does not create one and the
+  # values below are ignored. It must contain the keys:
+  #   database-url, encryption-key, and oidc-client-secret (only if OIDC is on)
+  existingSecret: ""
+  # PostgreSQL connection string. When postgresql.enabled is true and this is
+  # empty, it is built from the postgresql.auth values.
+  databaseUrl: ""
+  # Random 32-byte hex key that encrypts stored ClickHouse credentials.
+  # Generate with: openssl rand -hex 32
+  # Changing it later makes already-stored credentials unreadable.
+  encryptionKey: ""
+  # OIDC client_secret (only used when config.AUTH_OIDC_ENABLED is "true").
+  oidcClientSecret: ""
+
+# Extra environment variables for the app container (list of Kubernetes EnvVar).
+extraEnv:
+  - name: NODE_OPTIONS
+    value: "--max-old-space-size=8192"
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
+
+# Optional pod DNS tuning, e.g. to lower ndots for external ClickHouse hosts:
+# dnsConfig:
+#   options:
+#     - name: ndots
+#       value: "1"
+dnsConfig: {}
+
+# The image runs as uid/gid 1001 (user `nextjs`).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+service:
+  type: ClusterIP
+  port: 80
+  # Container port the Next.js server listens on.
+  targetPort: 3000
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/enable-gzip: "true"
+    nginx.ingress.kubernetes.io/gzip-types: "text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+    nginx.ingress.kubernetes.io/proxy-busy-buffers-size: "24k"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/upstream-keepalive-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: hmg-borzoi.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: hmg-borzoi-tls
+  #    hosts:
+  #      - hmg-borzoi.example.com
+
+resources:
+  requests:
+    memory: "4Gi"
+    cpu: "4000m"
+  limits:
+    memory: "12Gi"
+    cpu: "8000m"
+
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Optional in-cluster PostgreSQL (single-replica StatefulSet), equivalent to
+# deploy/k8s/postgres-*.yaml. Disable it and set secret.databaseUrl to use an
+# external or managed PostgreSQL instead.
+postgresql:
+  enabled: false
+  image:
+    repository: postgres
+    tag: "15"
+    pullPolicy: IfNotPresent
+  auth:
+    username: hmg_borzoi_user
+    database: hmg_borzoi
+    # Required when postgresql.enabled is true and auth.existingSecret is empty.
+    password: ""
+    # Existing Secret with keys `postgres-user` and `postgres-password`.
+    # If set, secret.existingSecret must also be set because the chart cannot
+    # read the password to build DATABASE_URL.
+    existingSecret: ""
+  persistence:
+    size: 10Gi
+    # Empty uses the cluster default StorageClass.
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+  # PostgreSQL's official image runs as uid/gid 999.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+      ephemeral-storage: "2Gi"
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
