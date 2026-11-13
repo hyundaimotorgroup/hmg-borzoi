@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Added
 
 - Resizable Table Explorer in Query Editor and Databases, with keyboard controls and separately remembered widths
+- Helm chart (`deploy/helm/hmg-borzoi`) for Kubernetes deployment, with optional Ingress and in-cluster PostgreSQL
 
 ## [1.0.0] - 2026-10-28
 

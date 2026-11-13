@@ -1,0 +1,165 @@
+{{- $secretName := include "hmg-borzoi.secretName" . }}
+{{- $oidcEnabled := eq (toString (.Values.config.AUTH_OIDC_ENABLED | default "false")) "true" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hmg-borzoi.fullname" . }}
+  labels:
+    {{- include "hmg-borzoi.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "hmg-borzoi.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # Roll the pods when the ConfigMap or chart-managed Secret changes.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if not .Values.secret.existingSecret }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "hmg-borzoi.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "hmg-borzoi.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.dnsConfig }}
+      dnsConfig:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- $waitExternal := and (not .Values.postgresql.enabled) .Values.waitForPostgres.enabled }}
+      {{- if or .Values.postgresql.enabled $waitExternal .Values.migration.enabled }}
+      initContainers:
+        {{- if or .Values.postgresql.enabled $waitExternal }}
+        {{- $wait := ternary .Values.postgresql .Values.waitForPostgres .Values.postgresql.enabled }}
+        - name: wait-for-postgres
+          image: "{{ $wait.image.repository }}:{{ $wait.image.tag }}"
+          imagePullPolicy: {{ $wait.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for PostgreSQL to be ready..."
+              {{- if .Values.postgresql.enabled }}
+              until pg_isready -h {{ include "hmg-borzoi.postgresql.fullname" . }} -p 5432; do
+              {{- else }}
+              until pg_isready -h {{ required "waitForPostgres.host is required when waitForPostgres.enabled=true" .Values.waitForPostgres.host }} -p {{ .Values.waitForPostgres.port }}{{ with .Values.waitForPostgres.username }} -U {{ . }}{{ end }}{{ with .Values.waitForPostgres.database }} -d {{ . }}{{ end }}; do
+              {{- end }}
+                echo "Waiting for postgres..."
+                sleep 2
+              done
+              echo "PostgreSQL is ready!"
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
+        {{- if .Values.migration.enabled }}
+        - name: prisma-migrate
+          image: {{ include "hmg-borzoi.migrationImage" . | quote }}
+          imagePullPolicy: {{ .Values.migration.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Running Prisma migrations..."
+              npx prisma migrate deploy
+              echo "Migrations completed!"
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: database-url
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: encryption-key
+          {{- with .Values.migration.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ include "hmg-borzoi.fullname" . }}
+          image: {{ include "hmg-borzoi.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: database-url
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: encryption-key
+            {{- if $oidcEnabled }}
+            - name: AUTH_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: oidc-client-secret
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "hmg-borzoi.configMapName" . }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

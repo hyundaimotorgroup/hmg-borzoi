@@ -1,0 +1,15 @@
+apiVersion: v2
+name: hmg-borzoi
+description: Helm chart for hmg-borzoi, an administration platform for operating physical ClickHouse clusters
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+kubeVersion: ">=1.25.0-0"
+home: https://github.com/hyundaimotorgroup/hmg-borzoi
+sources:
+  - https://github.com/hyundaimotorgroup/hmg-borzoi
+keywords:
+  - clickhouse
+  - administration
+  - nextjs
+  - hmg-borzoi

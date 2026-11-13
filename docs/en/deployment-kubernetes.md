@@ -26,6 +26,8 @@ deploy/
 │   ├── postgres-configmap.yaml # In-cluster PostgreSQL config
 │   ├── postgres-service.yaml
 │   └── postgres-statefulset.yaml
+├── helm/
+│   └── hmg-borzoi/             # Helm chart (alternative to the manifests above)
 └── scripts/
     ├── build-and-push.sh.example  # Build script template
     ├── build-and-push.sh          # Active file (gitignored)
@@ -34,6 +36,8 @@ deploy/
 ```
 
 > The default Kubernetes namespace is `borzoi`. Override `K8S_NAMESPACE` in `deploy.sh` when deploying to another namespace.
+
+> Prefer Helm? Build and push the images (step 3), then follow [deploy/helm/hmg-borzoi/README.md](../../deploy/helm/hmg-borzoi/README.md) instead of steps 1, 2, and 4.
 
 ---
 
