@@ -56,6 +56,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { writeTextSafe } from "@/lib/utils/clipboard";
+import { serializeQueryResultCsv } from "@/lib/utils/query-result-csv";
 import { useSettings } from "@/contexts/SettingsContext";
 import { formatDateWithTimezone } from "@/lib/utils/time-formatter";
 import { useNdjsonStream } from "@/lib/hooks/use-ndjson-stream";
@@ -617,12 +618,7 @@ export function QueryEditor({ currentUser: _currentUser, clusterId, clusterName,
 
   const exportResults = () => {
     if (!queryResult) return;
-    const csv = [
-      queryResult.columns.join(","),
-      ...queryResult.rows.map((row) =>
-        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
-      ),
-    ].join("\n");
+    const csv = serializeQueryResultCsv(queryResult.columns, queryResult.rows);
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
