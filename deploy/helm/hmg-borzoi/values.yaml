@@ -6,6 +6,9 @@ fullnameOverride: ""
 
 replicaCount: 1
 
+# Number of old ReplicaSets kept for rollback (Kubernetes default is 10).
+revisionHistoryLimit: 3
+
 # Extra labels added to every resource, e.g. { environment: dev }.
 commonLabels: {}
 

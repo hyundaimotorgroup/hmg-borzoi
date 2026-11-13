@@ -8,6 +8,7 @@ metadata:
     {{- include "hmg-borzoi.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "hmg-borzoi.selectorLabels" . | nindent 6 }}

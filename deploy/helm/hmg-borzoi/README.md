@@ -73,6 +73,7 @@ kubectl exec -it deploy/hmg-borzoi -n hmg-borzoi -- \
 
 | Key | Default | Description |
 |-----|---------|-------------|
+| `revisionHistoryLimit` | `3` | Old ReplicaSets kept for rollback (Kubernetes default is 10) |
 | `image.repository` / `image.tag` | placeholder / `appVersion` | Application image |
 | `migration.enabled` | `true` | Run `prisma migrate deploy` in an initContainer |
 | `migration.image.*` | placeholder / `appVersion` | Migration image |
