@@ -40,7 +40,10 @@ interface ClickHouseQueryLogContext {
 }
 
 const DEFAULT_SLOW_QUERY_THRESHOLD_MS = Number(process.env.CLICKHOUSE_SLOW_QUERY_MS ?? 3000);
-const pendingClientCreations = new Map<string, Promise<UnifiedClickHouseClient | null>>();
+const pendingClientCreations = new Map<string, {
+  generation: number;
+  promise: Promise<UnifiedClickHouseClient | null>;
+}>();
 
 function getQueryPreview(query: string): string {
   return query.replace(/\s+/g, ' ').trim().slice(0, 180);
@@ -179,6 +182,7 @@ export async function createClickHouseClient(
   try {
     const cacheKey = userId ?? '__system__';
     const pendingKey = `${cacheKey}:${clusterId}`;
+    const generation = credentialCache.generation;
 
     const pooled = clickHouseClientPool.get(cacheKey, clusterId);
     if (pooled) {
@@ -186,8 +190,9 @@ export async function createClickHouseClient(
     }
 
     const pending = pendingClientCreations.get(pendingKey);
-    if (pending) {
-      const sharedClient = await pending;
+    if (pending?.generation === generation) {
+      const sharedClient = await pending.promise;
+      if (credentialCache.generation !== generation) return null;
       return sharedClient ? { ...sharedClient, close: async () => {} } : null;
     }
 
@@ -198,6 +203,7 @@ export async function createClickHouseClient(
         logger.debug(`[ClickHouse] Cache miss — resolving credentials: cluster=${clusterId}, user=${cacheKey}`);
         credentials = await resolveCredentials(clusterId, userId);
         if (!credentials) return null;
+        if (credentialCache.generation !== generation) return null;
         credentialCache.set(cacheKey, clusterId, credentials);
       } else {
         logger.debug(`[ClickHouse] Cache hit — skipping DB queries: cluster=${clusterId}, user=${cacheKey}`);
@@ -220,13 +226,16 @@ export async function createClickHouseClient(
       return wrapped;
     })();
 
-    pendingClientCreations.set(pendingKey, creationPromise);
+    pendingClientCreations.set(pendingKey, { generation, promise: creationPromise });
 
     try {
       const sharedClient = await creationPromise;
+      if (credentialCache.generation !== generation) return null;
       return sharedClient ? { ...sharedClient, close: async () => {} } : null;
     } finally {
-      pendingClientCreations.delete(pendingKey);
+      if (pendingClientCreations.get(pendingKey)?.promise === creationPromise) {
+        pendingClientCreations.delete(pendingKey);
+      }
     }
   } catch (error) {
     logger.error('Failed to create ClickHouse client:', error);
