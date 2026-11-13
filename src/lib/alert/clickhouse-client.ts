@@ -1,5 +1,6 @@
 import { createClickHouseClient } from '../clickhouse';
 import { findForbiddenKeyword, hasMultipleStatements } from './query-policy';
+import { assertAlertClusterAccess } from './access';
 
 /**
  * Validate user query
@@ -26,23 +27,25 @@ export async function executeQuery(clusterId: string, query: string, userId?: st
   // Validate query
   validateQuery(query);
 
+  await assertAlertClusterAccess(clusterId, userId);
+
   // Create client per cluster
   const client = await createClickHouseClient(clusterId, userId);
 
-  if (!client) {
-    throw new Error(`Failed to create ClickHouse client for cluster: ${clusterId}`);
-  }
-
   try {
+    // Client acquisition may await a shared pending creation or return a warm
+    // pooled client. Neither is evidence of the owner's current permission.
+    await assertAlertClusterAccess(clusterId, userId);
+    if (!client) {
+      throw new Error(`Failed to create ClickHouse client for cluster: ${clusterId}`);
+    }
     const data = await client.query<Record<string, unknown>>({
       query,
       clickhouse_settings: { readonly: '1' },
     });
-    await client.close();
     return data;
-  } catch (error) {
-    await client.close();
-    throw error;
+  } finally {
+    await client?.close();
   }
 }
 
