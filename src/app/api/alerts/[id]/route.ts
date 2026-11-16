@@ -53,8 +53,12 @@ const patchHandler: AuthedHandler = async (request, { params }, user) => {
     }
     const parsedBody = parsed.data;
 
+    // Administrators may stop a rule without querying its cluster. Any other
+    // supplied field still requires the normal cluster permission check.
+    const isAdminDisableOnly = user.role === 'admin' && parsedBody.enabled === false &&
+      Object.entries(parsedBody).every(([field, value]) => field === 'enabled' || value === undefined);
     const clusterId = parsedBody.clusterId ?? existingRule.clusterId;
-    if (!(await hasClusterPermission(user.id, clusterId))) {
+    if (!isAdminDisableOnly && !(await hasClusterPermission(user.id, clusterId))) {
       return NextResponse.json(
         { error: 'Forbidden: No access to this cluster' },
         { status: 403 }

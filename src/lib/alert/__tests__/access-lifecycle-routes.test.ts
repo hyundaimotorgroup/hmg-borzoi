@@ -3,9 +3,10 @@ import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthedHandler } from '@/lib/auth/middleware';
 import type { UnifiedClickHouseClient } from '@/lib/clickhouse';
+import type { SessionUser } from '@/types/auth';
 
 const mocks = vi.hoisted(() => ({
-  actor: { id: 'admin1', name: 'Admin', email: 'admin@example.com', role: 'admin' as const },
+  actor: { id: 'admin1', name: 'Admin', email: 'admin@example.com', role: 'admin' as SessionUser['role'] },
   prisma: {
     user: { findUnique: vi.fn(), delete: vi.fn() },
     cluster: { findMany: vi.fn() },
@@ -56,6 +57,7 @@ beforeEach(() => {
     clickHouseClientPool.invalidateUser(userId);
   }
   vi.resetAllMocks();
+  mocks.actor.role = 'admin';
   mocks.prisma.user.findUnique.mockResolvedValue({ id: 'u1', role: 'developer' });
   mocks.prisma.userClusterAccess.findMany.mockResolvedValue([
     { clusterId: 'c1', chPassword: 'old-secret' }, { clusterId: 'c2', chPassword: 'old-secret' },
@@ -215,5 +217,70 @@ describe('alert edits after revocation', () => {
   it('allows an authorized admin to keep an orphaned rule disabled', async () => {
     mocks.prisma.alertRule.findFirst.mockResolvedValue({ id: 'rule1', clusterId: 'c1', createdBy: 'deleted-user', enabled: false });
     expect((await patch({ enabled: false })).status).toBe(200);
+  });
+
+  it('allows an admin without a cluster grant to disable an active orphaned rule', async () => {
+    mocks.prisma.userClusterAccess.findUnique.mockResolvedValue(null);
+    mocks.prisma.alertRule.findFirst.mockResolvedValue({ id: 'rule1', clusterId: 'c1', createdBy: 'deleted-user', enabled: true });
+    expect((await patch({ enabled: false })).status).toBe(200);
+    expect(mocks.prisma.userClusterAccess.findUnique).not.toHaveBeenCalled();
+    expect(mocks.prisma.alertRule.update).toHaveBeenCalledWith({
+      where: { id: 'rule1' }, data: expect.objectContaining({ enabled: false }),
+    });
+  });
+
+  it.each([
+    ['name', { name: 'Renamed alert' }],
+    ['description', { description: 'Updated description' }],
+    ['clusterId', { clusterId: 'c2' }],
+    ['query', { query: 'SELECT value FROM metrics' }],
+    ['checkIntervalMinutes', { checkIntervalMinutes: 5 }],
+    ['thresholds', { thresholds: [{ severity: 'warning', operator: '>', value: 10 }] }],
+    ['thresholdColumnName', { thresholdColumnName: 'value' }],
+    ['notificationChannels', { notificationChannels: [{ type: 'webhook', url: 'https://example.com/alerts' }] }],
+    ['resultDisplayMode', { resultDisplayMode: 'showOnlyTriggering' }],
+  ] as const)('requires cluster access when an admin disables a rule and also changes %s', async (_field, changes) => {
+    mocks.prisma.userClusterAccess.findUnique.mockResolvedValue(null);
+    expect((await patch({ enabled: false, ...changes })).status).toBe(403);
+    expect(mocks.prisma.alertRule.update).not.toHaveBeenCalled();
+  });
+
+  it.each(['developer', 'viewer'] as const)('does not exempt a %s without a cluster grant from disable checks', async (role) => {
+    mocks.actor.role = role;
+    mocks.prisma.alertRule.findFirst.mockResolvedValue({ id: 'rule1', clusterId: 'c1', createdBy: 'admin1', enabled: true });
+    mocks.prisma.userClusterAccess.findUnique.mockResolvedValue(null);
+    expect((await patch({ enabled: false })).status).toBe(403);
+    expect(mocks.prisma.alertRule.findFirst).toHaveBeenCalledWith({ where: { id: 'rule1', createdBy: 'admin1' } });
+    expect(mocks.prisma.alertRule.update).not.toHaveBeenCalled();
+  });
+
+  it('preserves ownership checks when a non-admin tries to disable another user’s rule', async () => {
+    mocks.actor.role = 'developer';
+    mocks.prisma.alertRule.findFirst.mockResolvedValue(null);
+    expect((await patch({ enabled: false })).status).toBe(404);
+    expect(mocks.prisma.alertRule.findFirst).toHaveBeenCalledWith({ where: { id: 'rule1', createdBy: 'admin1' } });
+    expect(mocks.prisma.alertRule.update).not.toHaveBeenCalled();
+  });
+
+  it('allows renaming a disabled orphaned rule without changing its enabled state', async () => {
+    mocks.prisma.alertRule.findFirst.mockResolvedValue({ id: 'rule1', clusterId: 'c1', createdBy: 'deleted-user', enabled: false });
+    mocks.prisma.userClusterAccess.findUnique.mockImplementation(async ({ where }) =>
+      where.userId_clusterId.userId === 'admin1' ? { id: 'admin-grant' } : null);
+    expect((await patch({ name: 'Renamed alert' })).status).toBe(200);
+    expect(mocks.prisma.alertRule.update.mock.calls[0][0].data).not.toHaveProperty('enabled');
+    expect(mocks.prisma.userClusterAccess.findUnique).toHaveBeenCalledOnce();
+  });
+
+  it('uses the existing enabled state to reject editing an active rule whose owner has no grant', async () => {
+    mocks.prisma.alertRule.findFirst.mockResolvedValue({ id: 'rule1', clusterId: 'c1', createdBy: 'deleted-user', enabled: true });
+    mocks.prisma.userClusterAccess.findUnique.mockImplementation(async ({ where }) =>
+      where.userId_clusterId.userId === 'admin1' ? { id: 'admin-grant' } : null);
+    expect((await patch({ name: 'Renamed alert' })).status).toBe(403);
+    expect(mocks.prisma.alertRule.update).not.toHaveBeenCalled();
+  });
+
+  it('does not reactivate an authorized disabled rule on a name-only PATCH', async () => {
+    expect((await patch({ name: 'Renamed alert' })).status).toBe(200);
+    expect(mocks.prisma.alertRule.update.mock.calls[0][0].data).not.toHaveProperty('enabled');
   });
 });

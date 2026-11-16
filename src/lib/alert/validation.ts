@@ -151,11 +151,16 @@ const alertRuleSchemaBase = z.object({
     .array(notificationChannelSchema)
     .min(1, 'At least one notification channel is required')
     .max(5, 'Up to 5 notification channels can be configured'),
-  resultDisplayMode: z.enum(['showOnlyTriggering', 'showAll']).default('showOnlyTriggering'),
-  enabled: z.boolean().default(true),
+  resultDisplayMode: z.enum(['showOnlyTriggering', 'showAll']),
+  enabled: z.boolean(),
 });
 
-export const alertRuleSchema = alertRuleSchemaBase.superRefine((data, ctx) => {
+// Defaults belong to creation only. PATCH must preserve omitted fields so it
+// cannot silently enable a disabled rule or look like a multi-field update.
+export const alertRuleSchema = alertRuleSchemaBase.extend({
+  resultDisplayMode: alertRuleSchemaBase.shape.resultDisplayMode.default('showOnlyTriggering'),
+  enabled: alertRuleSchemaBase.shape.enabled.default(true),
+}).superRefine((data, ctx) => {
   validateThresholdLevels(data.thresholds, ctx);
 });
 
