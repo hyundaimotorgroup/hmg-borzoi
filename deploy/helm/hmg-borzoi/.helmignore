@@ -1,0 +1,14 @@
+# Patterns to ignore when building packages.
+.DS_Store
+.git/
+.gitignore
+*.swp
+*.swo
+*.bak
+*.backup
+*.tmp
+.idea/
+.vscode/
+
+# Local values files may contain real secrets — never package them.
+values-*.yaml

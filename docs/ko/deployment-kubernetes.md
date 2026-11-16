@@ -26,6 +26,8 @@ deploy/
 │   ├── postgres-configmap.yaml # in-cluster PostgreSQL 설정
 │   ├── postgres-service.yaml
 │   └── postgres-statefulset.yaml
+├── helm/
+│   └── hmg-borzoi/             # Helm 차트 (위 매니페스트의 대안)
 └── scripts/
     ├── build-and-push.sh.example  # 빌드 스크립트 템플릿
     ├── build-and-push.sh          # 실제 사용 파일 (gitignore)
@@ -34,6 +36,8 @@ deploy/
 ```
 
 > 기본 Kubernetes namespace는 `borzoi`입니다. 다른 namespace에 배포하려면 `deploy.sh`에서 `K8S_NAMESPACE`를 재정의하세요.
+
+> Helm을 사용하려면 이미지를 빌드·푸시(3단계)한 뒤 1, 2, 4단계 대신 [deploy/helm/hmg-borzoi/README.md](../../deploy/helm/hmg-borzoi/README.md)를 따르세요.
 
 ---
 
