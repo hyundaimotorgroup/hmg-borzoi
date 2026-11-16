@@ -69,7 +69,7 @@ test('cluster detail redistributes ETC diagnostics into domain tabs', async ({ p
   await expect(page.getByText('Operations').first()).toBeVisible();
   await expect(page.getByText('Conn&Keeper').first()).toBeVisible();
   await expect(page.getByText('All Nodes - Overview')).toBeVisible();
-  await expect(page.getByText('Current Query Memory').first()).toBeVisible();
+  await expect(page.getByText('Tracked Process Memory').first()).toBeVisible();
   await expect(page.getByText('Distribution Queue').first()).toBeVisible();
   await expect(page.getByText('HTTP Connections').first()).toBeVisible();
   await expect(page.getByText('TCP Connections').first()).toBeVisible();
