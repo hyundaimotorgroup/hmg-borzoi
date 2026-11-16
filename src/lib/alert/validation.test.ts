@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   alertNotificationTestSchema,
   alertRuleApiCreateSchema,
+  alertRuleApiPatchSchema,
   alertRuleTestSchema,
   alertRuleTriggerSchema,
   getNotificationChannelIssueMap,
@@ -10,6 +11,35 @@ import {
 } from "./validation";
 
 describe("alert validation helpers", () => {
+  it("leaves an empty PATCH empty instead of applying create defaults", () => {
+    expect(alertRuleApiPatchSchema.parse({})).toEqual({});
+  });
+
+  it("does not add enabled or resultDisplayMode to a name-only PATCH", () => {
+    expect(alertRuleApiPatchSchema.parse({ name: "Renamed alert" })).toEqual({ name: "Renamed alert" });
+  });
+
+  it.each([true, false])("preserves an explicit enabled=%s PATCH", (enabled) => {
+    expect(alertRuleApiPatchSchema.parse({ enabled })).toEqual({ enabled });
+  });
+
+  it("preserves an explicitly supplied result display mode in a PATCH", () => {
+    expect(alertRuleApiPatchSchema.parse({ resultDisplayMode: "showAll" })).toEqual({ resultDisplayMode: "showAll" });
+  });
+
+  it("keeps enabled and result display defaults for alert creation", () => {
+    const result = alertRuleApiCreateSchema.parse({
+      clusterId: "ckc01",
+      name: "High CPU",
+      query: "SELECT value FROM metrics",
+      checkIntervalMinutes: 5,
+      thresholds: [{ severity: "warning", operator: ">=", value: 80 }],
+      notificationChannels: [{ type: "webhook", url: "https://example.com/alerts" }],
+    });
+    expect(result.enabled).toBe(true);
+    expect(result.resultDisplayMode).toBe("showOnlyTriggering");
+  });
+
   it("serializes thresholds with optional order", () => {
     expect(
       serializeAlertThresholds([

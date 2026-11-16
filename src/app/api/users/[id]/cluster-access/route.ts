@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { withRole, withAudit } from "@/lib/auth/middleware";
 import { encryptPassword } from "@/lib/clickhouse/index";
 import { credentialCache } from "@/lib/cache/credential-cache";
+import { clickHouseClientPool } from "@/lib/cache/client-pool";
 import { parseRequestJson, userClusterAccessSchema } from "@/lib/validation";
 import { USER_CLUSTER_ACCESS_SAFE_SELECT } from "@/lib/prisma-selects";
 
@@ -133,74 +134,81 @@ export const PUT = withRole(
         }
       }
 
- //
-      logger.debug('[PUT cluster-access] Deleting existing access...');
-      await prisma.userClusterAccess.deleteMany({
-        where: { userId: id },
-      });
+      // Prepare credentials before replacing grants so the scheduler cannot
+      // observe a temporary gap for clusters that are still authorized.
+      const dataToCreate = await Promise.all(
+        (clusterAccess ?? []).map(async (access: {
+          clusterId: string;
+          chUsername?: string;
+          chPassword?: string;
+        }, index: number) => {
+          logger.debug(`\n[PUT cluster-access] Processing access[${index}]:`);
+          logger.debug(`  - Cluster ID: ${access.clusterId}`);
+          logger.debug(`  - User ID: ${id}`);
+          logger.debug(`  - CH Username: ${access.chUsername || '(not provided)'}`);
+          logger.debug(`  - CH Password provided: ${access.chPassword ? (access.chPassword.trim() !== '' ? 'YES (new password)' : 'EMPTY (keep existing)') : 'NO (null)'}`);
 
- //
-      if (clusterAccess && clusterAccess.length > 0) {
-        const dataToCreate = await Promise.all(
-          clusterAccess.map(async (access: {
-            clusterId: string;
-            chUsername?: string;
-            chPassword?: string;
-          }, index: number) => {
-            logger.debug(`\n[PUT cluster-access] Processing access[${index}]:`);
-            logger.debug(`  - Cluster ID: ${access.clusterId}`);
-            logger.debug(`  - User ID: ${id}`);
-            logger.debug(`  - CH Username: ${access.chUsername || '(not provided)'}`);
-            logger.debug(`  - CH Password provided: ${access.chPassword ? (access.chPassword.trim() !== '' ? 'YES (new password)' : 'EMPTY (keep existing)') : 'NO (null)'}`);
-
-            if (isAdminTarget) {
-              const sharedCluster = sharedClusterMap.get(access.clusterId);
-              if (!sharedCluster) {
-                throw new Error(`Cluster ${access.clusterId} not found`);
-              }
-
-              logger.debug(`  ♻️  Admin role detected - using shared cluster credentials`);
-              return {
-                userId: id,
-                clusterId: access.clusterId,
-                chUsername: sharedCluster.username,
-                chPassword: sharedCluster.password,
-              };
+          if (isAdminTarget) {
+            const sharedCluster = sharedClusterMap.get(access.clusterId);
+            if (!sharedCluster) {
+              throw new Error(`Cluster ${access.clusterId} not found`);
             }
 
-            let finalPassword: string | null = null;
-            if (access.chPassword && access.chPassword.trim() !== '') {
-              logger.debug(`  ✅ Encrypting new password (length: ${access.chPassword.length})`);
-              finalPassword = await encryptPassword(access.chPassword);
-            } else if (access.chPassword === '' && existingPasswordMap.has(access.clusterId)) {
-              const existingPwd = existingPasswordMap.get(access.clusterId);
-              logger.debug(`  ♻️  Keeping existing password: ${existingPwd ? 'YES' : 'NO'}`);
-              finalPassword = existingPwd || null;
-            } else {
-              logger.debug(`  ⚠️  No password set (will be null)`);
-            }
-
-            const result = {
+            logger.debug(`  ♻️  Admin role detected - using shared cluster credentials`);
+            return {
               userId: id,
               clusterId: access.clusterId,
-              chUsername: access.chUsername || null,
-              chPassword: finalPassword,
+              chUsername: sharedCluster.username,
+              chPassword: sharedCluster.password,
             };
+          }
 
-            logger.debug(`  📝 Final data: clusterId=${result.clusterId}, chUsername=${result.chUsername || '(none)'}, chPassword=${result.chPassword ? '[ENCRYPTED]' : 'null'}`);
+          let finalPassword: string | null = null;
+          if (access.chPassword && access.chPassword.trim() !== '') {
+            logger.debug(`  ✅ Encrypting new password (length: ${access.chPassword.length})`);
+            finalPassword = await encryptPassword(access.chPassword);
+          } else if (access.chPassword === '' && existingPasswordMap.has(access.clusterId)) {
+            const existingPwd = existingPasswordMap.get(access.clusterId);
+            logger.debug(`  ♻️  Keeping existing password: ${existingPwd ? 'YES' : 'NO'}`);
+            finalPassword = existingPwd || null;
+          } else {
+            logger.debug(`  ⚠️  No password set (will be null)`);
+          }
 
-            return result;
-          })
-        );
+          const result = {
+            userId: id,
+            clusterId: access.clusterId,
+            chUsername: access.chUsername || null,
+            chPassword: finalPassword,
+          };
 
-        logger.debug(`[PUT cluster-access] Creating ${dataToCreate.length} access entries for clusters: ${dataToCreate.map((d) => d.clusterId).join(', ')}`);
-        await prisma.userClusterAccess.createMany({ data: dataToCreate });
+          logger.debug(`  📝 Final data: clusterId=${result.clusterId}, chUsername=${result.chUsername || '(none)'}, chPassword=${result.chPassword ? '[ENCRYPTED]' : 'null'}`);
 
-        const { clickHouseClientPool } = await import('@/lib/cache/client-pool');
-        for (const access of dataToCreate) {
-          credentialCache.invalidate(id, access.clusterId);
-          clickHouseClientPool.invalidateCluster(access.clusterId);
+          return result;
+        })
+      );
+
+      await prisma.$transaction(async (tx) => {
+        await tx.userClusterAccess.deleteMany({ where: { userId: id } });
+        if (dataToCreate.length > 0) {
+          await tx.userClusterAccess.createMany({ data: dataToCreate });
         }
+        await tx.alertRule.updateMany({
+          where: {
+            createdBy: id,
+            ...(requestedClusterIds.length > 0 && { clusterId: { notIn: requestedClusterIds } }),
+          },
+          data: { enabled: false, lastAlertStatus: null },
+        });
+      });
+
+      const affectedClusterIds = new Set([
+        ...existingAccess.map((access) => access.clusterId),
+        ...requestedClusterIds,
+      ]);
+      for (const clusterId of affectedClusterIds) {
+        credentialCache.invalidate(id, clusterId);
+        clickHouseClientPool.invalidate(id, clusterId);
       }
 
  //

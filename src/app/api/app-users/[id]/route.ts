@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { withRole, withAudit } from "@/lib/auth/middleware";
 import bcrypt from "bcryptjs";
 import { parseRequestJson, updateAppUserSchema } from "@/lib/validation";
+import { credentialCache } from "@/lib/cache/credential-cache";
+import { clickHouseClientPool } from "@/lib/cache/client-pool";
 
 export const PUT = withRole(
   withAudit(async (request: NextRequest, { params }) => {
@@ -98,10 +100,17 @@ export const DELETE = withRole(
         );
       }
 
-      // Delete user (UserClusterAccess is also cascade deleted due to schema configuration)
-      await prisma.user.delete({
-        where: { id }
+      // Alert ownership is not a User FK. Retain the rules/logs but stop their
+      // execution atomically with the cascading account/grant deletion.
+      await prisma.$transaction(async (tx) => {
+        await tx.alertRule.updateMany({
+          where: { createdBy: id },
+          data: { enabled: false, lastAlertStatus: null },
+        });
+        await tx.user.delete({ where: { id } });
       });
+      credentialCache.invalidateUser(id);
+      clickHouseClientPool.invalidateUser(id);
 
       return NextResponse.json({ message: "User deleted successfully" });
     } catch (error) {

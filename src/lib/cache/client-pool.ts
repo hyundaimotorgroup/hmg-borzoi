@@ -51,6 +51,25 @@ class ClickHouseClientPool {
     }
   }
 
+  invalidate(userId: string, clusterId: string): void {
+    const key = this.key(userId, clusterId);
+    const entry = this.pool.get(key);
+    if (entry) {
+      entry.client.close().catch(() => {});
+      this.pool.delete(key);
+    }
+  }
+
+  invalidateUser(userId: string): void {
+    const prefix = `${userId}::`;
+    for (const [key, entry] of this.pool.entries()) {
+      if (key.startsWith(prefix)) {
+        entry.client.close().catch(() => {});
+        this.pool.delete(key);
+      }
+    }
+  }
+
   private cleanup(): void {
     const now = Date.now();
     for (const [key, entry] of this.pool.entries()) {

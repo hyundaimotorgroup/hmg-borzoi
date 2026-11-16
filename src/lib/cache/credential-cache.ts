@@ -24,6 +24,7 @@ interface CacheEntry {
 class CredentialCache {
   private readonly cache = new Map<string, CacheEntry>();
   private readonly ttlMs: number;
+  private invalidationGeneration = 0;
 
   constructor(ttlMinutes = 5) {
     this.ttlMs = ttlMinutes * 60 * 1000;
@@ -53,6 +54,7 @@ class CredentialCache {
 
   /** Call when user Cluster access (chPassword) changes */
   invalidate(userId: string, clusterId: string): void {
+    this.invalidationGeneration++;
     const deleted = this.cache.delete(this.makeKey(userId, clusterId));
     if (deleted) {
       logger.debug(`[CredentialCache] Invalidated user=${userId}, cluster=${clusterId}`);
@@ -61,6 +63,7 @@ class CredentialCache {
 
   /** Call when Cluster password changes or Cluster is deleted */
   invalidateCluster(clusterId: string): void {
+    this.invalidationGeneration++;
     const suffix = `::${clusterId}`;
     let count = 0;
     for (const key of this.cache.keys()) {
@@ -76,6 +79,19 @@ class CredentialCache {
 
   get size(): number {
     return this.cache.size;
+  }
+
+  invalidateUser(userId: string): void {
+    this.invalidationGeneration++;
+    const prefix = `${userId}::`;
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(prefix)) this.cache.delete(key);
+    }
+  }
+
+  // Pending resolutions must not repopulate credentials after an invalidation.
+  get generation(): number {
+    return this.invalidationGeneration;
   }
 }
 

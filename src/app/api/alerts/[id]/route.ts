@@ -53,9 +53,24 @@ const patchHandler: AuthedHandler = async (request, { params }, user) => {
     }
     const parsedBody = parsed.data;
 
-    if (parsedBody.clusterId && !(await hasClusterPermission(user.id, parsedBody.clusterId))) {
+    // Administrators may stop a rule without querying its cluster. Any other
+    // supplied field still requires the normal cluster permission check.
+    const isAdminDisableOnly = user.role === 'admin' && parsedBody.enabled === false &&
+      Object.entries(parsedBody).every(([field, value]) => field === 'enabled' || value === undefined);
+    const clusterId = parsedBody.clusterId ?? existingRule.clusterId;
+    if (!isAdminDisableOnly && !(await hasClusterPermission(user.id, clusterId))) {
       return NextResponse.json(
         { error: 'Forbidden: No access to this cluster' },
+        { status: 403 }
+      );
+    }
+
+    // An admin can edit another user's rule, but it still executes as its owner.
+    // Do not reactivate an orphaned rule or move it outside the owner's grants.
+    if ((parsedBody.enabled ?? existingRule.enabled) &&
+        (!existingRule.createdBy || !(await hasClusterPermission(existingRule.createdBy, clusterId)))) {
+      return NextResponse.json(
+        { error: 'Forbidden: Alert owner has no access to this cluster' },
         { status: 403 }
       );
     }

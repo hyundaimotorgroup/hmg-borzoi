@@ -3,6 +3,7 @@ import { executeQuery, parseResult } from './clickhouse-client';
 import { sendNotification, sendResolvedNotification } from './notifier';
 import { buildThresholdFilteredQuery } from './query-builder';
 import { logger } from '@/lib/utils/logger';
+import { AlertAccessRevokedError, assertAlertRuleAccess } from './access';
 import type { AlertRule } from '@prisma/client';
 import {
   ALERT_SEVERITY_RANK,
@@ -148,8 +149,10 @@ async function evaluateRule(rule: AlertRule): Promise<AlertSeverityLevel | null 
     const executorUserId = rule.createdBy;
 
     if (!executorUserId) {
-      throw new Error(`Alert rule "${rule.name}" has no createdBy user`);
+      throw new AlertAccessRevokedError();
     }
+
+    await assertAlertRuleAccess(rule);
 
     const thresholds = parseThresholdLevels(rule.thresholds);
     const hasThresholdSettings = thresholds.length > 0;
@@ -175,6 +178,9 @@ async function evaluateRule(rule: AlertRule): Promise<AlertSeverityLevel | null 
       logger.debug(`[Evaluator] Filtered query: ${filteredQuery}`);
 
       const data = await executeQuery(rule.clusterId, filteredQuery, executorUserId);
+      // Revocation may commit while ClickHouse is processing the query. Discard
+      // that result before parsing, logging data, or sending fire/resolve alerts.
+      await assertAlertRuleAccess(rule);
       const parsed = parseResult(data);
       allRows = parsed.rows;
 
@@ -248,6 +254,13 @@ async function evaluateRule(rule: AlertRule): Promise<AlertSeverityLevel | null 
     logger.error(`[Evaluator] Error evaluating rule "${rule.name}": ${error}`);
     notificationSent = false;
     nextStatus = undefined;
+
+    if (err instanceof AlertAccessRevokedError) {
+      await prisma.alertRule.updateMany({
+        where: { id: rule.id, clusterId: rule.clusterId, createdBy: rule.createdBy },
+        data: { enabled: false, lastAlertStatus: null },
+      });
+    }
 
   } finally {
     const ruleWithMode = rule as AlertRule & { resultDisplayMode?: string };
