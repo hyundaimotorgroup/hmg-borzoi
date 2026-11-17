@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { validateQuery } from '@/lib/alert/clickhouse-client';
-import { withAuth } from '@/lib/auth/middleware';
+import { withAuth, withRole } from '@/lib/auth/middleware';
 import { hasClusterPermission } from '@/lib/auth/permissions';
 import { logger } from '@/lib/utils/logger';
 import { parseRequestJson } from '@/lib/validation';
@@ -43,7 +43,7 @@ export const GET = withAuth(async (request, _context, user) => {
   }
 });
 
-export const POST = withAuth(async (request, _context, user) => {
+export const POST = withRole(async (request, _context, user) => {
   try {
     const parsed = await parseRequestJson(request, alertRuleApiCreateSchema);
     if (!parsed.success) {
@@ -85,4 +85,4 @@ export const POST = withAuth(async (request, _context, user) => {
       { error: error instanceof Error ? error.message : 'Failed to create alert rule' },
       { status: 400 });
   }
-});
+}, ['admin', 'developer']);

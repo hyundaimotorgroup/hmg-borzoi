@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { validateQuery } from '@/lib/alert/clickhouse-client';
-import { withAuth, AuthedHandler } from '@/lib/auth/middleware';
+import { withAuth, withRole, AuthedHandler } from '@/lib/auth/middleware';
 import { hasClusterPermission } from '@/lib/auth/permissions';
 import { parseRequestJson } from '@/lib/validation';
 import {
@@ -131,5 +131,5 @@ const deleteHandler: AuthedHandler = async (_request, { params }, user) => {
 };
 
 export const GET = withAuth(getHandler);
-export const PATCH = withAuth(patchHandler);
-export const DELETE = withAuth(deleteHandler);
+export const PATCH = withRole(patchHandler, ['admin', 'developer']);
+export const DELETE = withRole(deleteHandler, ['admin', 'developer']);
