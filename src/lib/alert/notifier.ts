@@ -341,7 +341,7 @@ function createMarkdownTable(rows: Record<string, unknown>[]): string {
     .map(row => {
       const values = columns.map(col => {
         const val = row[col];
-        return String(val ?? '-').replace(/\|/g, '\\|');
+        return String(val ?? '-').replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
       });
       return '| ' + values.join(' | ') + ' |';
     })

@@ -69,11 +69,6 @@ export function formatDDL(ddl: string): string {
   formatted = formatted.replace(/\(\s*/g, "(\n  ");
   formatted = formatted.replace(/\s*\)/g, "\n)");
   formatted = formatted.replace(/,\s*(?=[a-zA-Z_`])/g, ",\n  ");
-  formatted = formatted.replace(/\nENGINE/g, "\nENGINE");
-  formatted = formatted.replace(/\nPARTITION BY/g, "\nPARTITION BY");
-  formatted = formatted.replace(/\nORDER BY/g, "\nORDER BY");
-  formatted = formatted.replace(/\nPRIMARY KEY/g, "\nPRIMARY KEY");
-  formatted = formatted.replace(/\nSETTINGS/g, "\nSETTINGS");
   formatted = formatted.replace(/\n{3,}/g, "\n\n");
   formatted = formatted.trim();
 
